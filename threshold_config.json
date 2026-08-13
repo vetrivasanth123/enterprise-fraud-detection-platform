@@ -1,0 +1,15 @@
+{
+    "optimal_threshold": 0.64,
+    "strategy": "Dollar-Weighted Cost Optimization",
+    "calibrated": true,
+    "brier_score": 0.00037,
+    "holdout_pr_auc": 0.8529,
+    "min_portfolio_loss_usd": 3652.98,
+    "feature_count": 34,
+    "engineered_features": [
+        "Hour_Of_Day",
+        "Is_Night_Tx",
+        "Log_Amount",
+        "Is_Micro_Tx"
+    ]
+}
