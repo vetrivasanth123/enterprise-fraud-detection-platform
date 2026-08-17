@@ -40,7 +40,7 @@ except Exception as e:
   st.error(f"Error loading model artifacts: {e}")
   st.stop()
 
-# Helper to fetch real row data from validation set for accurate presets
+# Helper to fetch real row data from validation set
 @st.cache_data
 def get_validation_row(idx):
   for filename in ["val.csv", "validation.csv", "test.csv"]:
@@ -77,23 +77,21 @@ col_left, col_right = st.columns([1, 1])
 with col_left:
   st.subheader("Transaction Inputs")
   
-  # Preset Scenario Selector for Easy Demo / Testing
+  # Preset Scenario Selector
   demo_scenario = st.selectbox(
       "Load Scenario Preset",
       [
           "Custom Input", 
           "🟢 Standard Pass (Low Risk)", 
-          "🟠 Manual Review (Index 21504)", 
+          "🟠 Manual Review (Borderline Queue)", 
           "🔴 Blocked Fraud (Index 821)"
       ]
   )
   
-  # Fetch preset row dictionaries if selected
+  # Fetch real data for Blocked Fraud from Index 821
   active_row_data = None
   if demo_scenario == "🔴 Blocked Fraud (Index 821)":
       active_row_data = get_validation_row(821)
-  elif demo_scenario == "🟠 Manual Review (Index 21504)":
-      active_row_data = get_validation_row(21504)
 
   # Set default values based on selection
   if active_row_data:
@@ -102,6 +100,13 @@ with col_left:
       default_v14 = float(active_row_data.get("V14", 0.0))
       default_v10 = float(active_row_data.get("V10", 0.0))
       default_v4 = float(active_row_data.get("V4", 0.0))
+  elif demo_scenario == "🟠 Manual Review (Borderline Queue)":
+      # Tuned borderline values to reliably hit the 0.60 - 0.64 manual review band
+      default_amount = 350.0
+      default_time = 52000.0
+      default_v14 = -7.2
+      default_v10 = -4.8
+      default_v4 = 4.2
   elif demo_scenario == "🟢 Standard Pass (Low Risk)":
       default_amount = 15.0
       default_time = 406.0
