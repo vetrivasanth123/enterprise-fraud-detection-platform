@@ -9,15 +9,41 @@ import pandas as pd
 import streamlit as st
 
 
-# ------------------------------------------------------------
-# Project root
-# app.py is inside dashboard/, so move one level up.
-# ------------------------------------------------------------
+# ============================================================
+# PROJECT PATH
+# ============================================================
+
+# app.py:
+# enterprise-fraud-detection-platform/
+# └── dashboard/
+#     └── app.py
+#
+# Therefore project root is one directory above app.py.
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
+SRC_DIR = ROOT_DIR / "src"
+ARTIFACTS_DIR = ROOT_DIR / "artifacts"
+
+# Add both project root and src to Python's import path.
+sys.path.insert(0, str(ROOT_DIR))
+sys.path.insert(0, str(SRC_DIR))
+# ============================================================
+# IMPORT CHECK
+# ============================================================
+
+if not hasattr(sys.modules["src.fraud_engine"], "FraudDecisionEngine"):
+    st.error(
+        "FraudDecisionEngine was not found inside src/fraud_engine.py"
+    )
+    st.stop()
+
+# ============================================================
+# IMPORT PROJECT MODULES
+# ============================================================
+
+from src.fraud_engine import FraudDecisionEngine
+from src.explainability import FraudExplainabilityEngine
 
 
 # ============================================================
