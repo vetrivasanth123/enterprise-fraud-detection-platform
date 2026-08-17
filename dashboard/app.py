@@ -2,18 +2,17 @@ import json
 import os
 import sys
 
-# Add root directory to sys.path
-root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-if root_dir not in sys.path:
-    sys.path.append(root_dir)
+# Define BASE_DIR as the project root directory
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if BASE_DIR not in sys.path:
+    sys.path.append(BASE_DIR)
 
 import joblib
 import numpy as np
 import pandas as pd
-import streamlit as st
-
 from src.explainability import FraudExplainabilityEngine
 from src.fraud_engine import FraudDecisionEngine
+import streamlit as st
 
 st.set_page_config(
     page_title="Enterprise Fraud Risk Platform", page_icon="🛡️", layout="wide"
