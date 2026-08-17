@@ -40,40 +40,15 @@ except Exception as e:
     st.stop()
 
 
-# Automatically scan validation set to find authentic rows for each tier
+# Helper to fetch real validation rows securely without altering model outputs
 @st.cache_data
-def get_sample_row_for_tier(tier_type):
+def get_validation_row(idx):
     for filename in ["val.csv", "validation.csv", "test.csv"]:
         if os.path.exists(filename):
             try:
                 df = pd.read_csv(filename)
-                temp_df = df.copy()
-                if 'Time' in temp_df.columns and 'Hour_Of_Day' not in temp_df.columns:
-                    temp_df['Hour_Of_Day'] = (temp_df['Time'] // 3600) % 24
-                
-                target_col = 'Class' if 'Class' in temp_df.columns else temp_df.columns[-1]
-                X_sample = temp_df.drop(columns=[target_col])
-                if hasattr(engine.model, 'feature_names_'):
-                    X_sample = X_sample[engine.model.feature_names_]
-                
-                probs = engine.model.predict_proba(X_sample)[:, 1]
-                
-                if tier_type == "PASS":
-                    idx = np.where(probs < 0.20)[0]
-                elif tier_type == "2FA":
-                    idx = np.where((probs >= 0.20) & (probs < 0.60))[0]
-                elif tier_type == "REVIEW":
-                    # Pull a high-risk 2FA transaction (e.g., ~0.55 - 0.59) to serve as the borderline review case
-                    idx = np.where((probs >= 0.50) & (probs < 0.60))[0]
-                    if len(idx) == 0:
-                        idx = [np.abs(probs - 0.58).argmin()]
-                elif tier_type == "BLOCK":
-                    idx = np.where(probs >= 0.64)[0]
-                else:
-                    return df.iloc[0].to_dict()
-                
-                if len(idx) > 0:
-                    return df.iloc[idx[0]].to_dict()
+                if idx < len(df):
+                    return df.iloc[idx].to_dict()
             except Exception:
                 continue
     return None
@@ -110,21 +85,21 @@ with col_left:
             "Custom Input", 
             "🟢 Standard Pass (Low Risk)", 
             "🟡 Step-Up 2FA (Medium Risk)",
-            "🟠 Manual Review (Borderline Queue)", 
-            "🔴 Blocked Fraud (High Risk)"
+            "🟠 Boundary Case (Index 21504)", 
+            "🔴 Blocked Fraud (Index 821)"
         ]
     )
     
-    # Fetch real row dynamically based on selected preset
+    # Fetch real row dynamically based on selected preset (100% native data)
     active_row_data = None
     if demo_scenario == "🟢 Standard Pass (Low Risk)":
-        active_row_data = get_sample_row_for_tier("PASS")
+        active_row_data = get_validation_row(0)
     elif demo_scenario == "🟡 Step-Up 2FA (Medium Risk)":
-        active_row_data = get_sample_row_for_tier("2FA")
-    elif demo_scenario == "🟠 Manual Review (Borderline Queue)":
-        active_row_data = get_sample_row_for_tier("REVIEW")
-    elif demo_scenario == "🔴 Blocked Fraud (High Risk)":
-        active_row_data = get_sample_row_for_tier("BLOCK")
+        active_row_data = get_validation_row(150)  # Representative 2FA row
+    elif demo_scenario == "🟠 Boundary Case (Index 21504)":
+        active_row_data = get_validation_row(21504)
+    elif demo_scenario == "🔴 Blocked Fraud (Index 821)":
+        active_row_data = get_validation_row(821)
 
     # Set default values from the fetched real row
     if active_row_data:
@@ -160,7 +135,7 @@ with col_left:
     v10 = st.slider("V10 (Secondary Anomaly Flag)", -20.0, 10.0, default_v10, 0.5)
     v4 = st.slider("V4 (Transaction Intent Correlation)", -10.0, 10.0, default_v4, 0.5)
 
-    # Construct payload using all 28 features from the real row if loaded
+    # Construct payload using all 28 features from the real row natively
     payload = {"Time": time_val, "Amount": amount}
     if active_row_data and demo_scenario != "Custom Input":
         for k, v in active_row_data.items():
@@ -181,21 +156,15 @@ with col_left:
 with col_right:
     st.subheader("Decision Engine Output")
     if st.button("Evaluate Transaction Payload", type="primary"):
+        # 100% NATIVE PREDICTION - ZERO OVERRIDES
         res = engine.predict_transaction(payload)
         prob = res["probability"]
         tier = res["risk_tier"]
         action = res["action"]
 
-        # DEMO OVERRIDE for Manual Review preset to ensure flawless presentation
-        if demo_scenario == "🟠 Manual Review (Borderline Queue)":
-            action = "MANUAL REVIEW"
-            tier = "BORDERLINE INVESTIGATION"
-            if prob < 0.60:
-                prob = max(prob, 0.6150)  # Display realistic review probability score
-
         if action == "PASS":
             st.success(f"**Action: {action}** | Tier: {tier}")
-        elif action in ["STEP-UP 2FA", "MANUAL REVIEW", "BORDERLINE INVESTIGATION"]:
+        elif action in ["STEP-UP 2FA", "MANUAL REVIEW"]:
             st.warning(f"**Action: {action}** | Tier: {tier}")
         else:
             st.error(f"**Action: {action}** | Tier: {tier}")
