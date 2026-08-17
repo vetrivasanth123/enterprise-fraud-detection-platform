@@ -1212,7 +1212,7 @@ with col_right:
                 # ============================================
 
                 st.metric(
-                    "Fraud Probability (PD)",
+                    "Fraud Probability",
                     f"{probability * 100:.3f}%",
                 )
 
