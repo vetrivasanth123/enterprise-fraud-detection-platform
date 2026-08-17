@@ -5,7 +5,7 @@ import sys
 # Ensure root directory is in sys.path
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if root_dir not in sys.path:
-  sys.path.append(root_dir)
+    sys.path.append(root_dir)
 
 import joblib
 import numpy as np
@@ -20,38 +20,37 @@ st.set_page_config(
 
 st.title("🛡️ Enterprise Fraud Detection & Risk Triage Platform")
 st.caption(
-    "Real-Time Transaction Scoring, Multi-Tier Risk Allocation & SHAP"
-    " Explainability"
+    "Real-Time Transaction Scoring, Multi-Tier Risk Allocation & SHAP Explainability"
 )
 
 
 @st.cache_resource
 def load_resources():
-  engine = FraudDecisionEngine()
-  explainer = FraudExplainabilityEngine()
-  with open("artifacts/threshold_config.json", "r") as f:
-    config = json.load(f)
-  return engine, explainer, config
+    engine = FraudDecisionEngine()
+    explainer = FraudExplainabilityEngine()
+    with open("artifacts/threshold_config.json", "r") as f:
+        config = json.load(f)
+    return engine, explainer, config
 
 
 try:
-  engine, explainer, config = load_resources()
+    engine, explainer, config = load_resources()
 except Exception as e:
-  st.error(f"Error loading model artifacts: {e}")
-  st.stop()
+    st.error(f"Error loading model artifacts: {e}")
+    st.stop()
 
 # Helper to fetch real row data from validation set
 @st.cache_data
 def get_validation_row(idx):
-  for filename in ["val.csv", "validation.csv", "test.csv"]:
-    if os.path.exists(filename):
-      try:
-        df = pd.read_csv(filename)
-        if idx < len(df):
-          return df.iloc[idx].to_dict()
-      except Exception:
-        continue
-  return None
+    for filename in ["val.csv", "validation.csv", "test.csv"]:
+        if os.path.exists(filename):
+            try:
+                df = pd.read_csv(filename)
+                if idx < len(df):
+                    return df.iloc[idx].to_dict()
+            except Exception:
+                continue
+    return None
 
 # 1. System Overview Metrics
 st.header("1. Portfolio & System Overview")
@@ -75,106 +74,106 @@ st.header("2. Real-Time Transaction Scoring & Risk Triage")
 col_left, col_right = st.columns([1, 1])
 
 with col_left:
-  st.subheader("Transaction Inputs")
-  
-  # Preset Scenario Selector
-  demo_scenario = st.selectbox(
-      "Load Scenario Preset",
-      [
-          "Custom Input", 
-          "🟢 Standard Pass (Low Risk)", 
-          "🟠 Manual Review (Borderline Queue)", 
-          "🔴 Blocked Fraud (Index 821)"
-      ]
-  )
-  
-  # Fetch real data for Blocked Fraud from Index 821
-  active_row_data = None
-  if demo_scenario == "🔴 Blocked Fraud (Index 821)":
-      active_row_data = get_validation_row(821)
+    st.subheader("Transaction Inputs")
+    
+    # Preset Scenario Selector
+    demo_scenario = st.selectbox(
+        "Load Scenario Preset",
+        [
+            "Custom Input", 
+            "🟢 Standard Pass (Low Risk)", 
+            "🟠 Manual Review (Borderline Queue)", 
+            "🔴 Blocked Fraud (Index 821)"
+        ]
+    )
+    
+    # Fetch real data for Blocked Fraud from Index 821
+    active_row_data = None
+    if demo_scenario == "🔴 Blocked Fraud (Index 821)":
+        active_row_data = get_validation_row(821)
 
-  # Set default values based on selection
-  if active_row_data:
-      default_amount = float(active_row_data.get("Amount", 15.0))
-      default_time = float(active_row_data.get("Time", 406.0))
-      default_v14 = float(active_row_data.get("V14", 0.0))
-      default_v10 = float(active_row_data.get("V10", 0.0))
-      default_v4 = float(active_row_data.get("V4", 0.0))
-   elif demo_scenario == "🟠 Manual Review (Borderline Queue)":
-      # Tuned borderline values to reliably hit the 0.60 - 0.64 manual review band
-      default_amount = 550.0
-      default_time = 72000.0
-      default_v14 = -9.5
-      default_v10 = -6.8
-      default_v4 = 6.2
-  elif demo_scenario == "🟢 Standard Pass (Low Risk)":
-      default_amount = 15.0
-      default_time = 406.0
-      default_v14 = 0.0
-      default_v10 = 0.0
-      default_v4 = 0.0
-  else:  # Custom Input defaults
-      default_amount = 15.0
-      default_time = 406.0
-      default_v14 = 0.0
-      default_v10 = 0.0
-      default_v4 = 0.0
+    # Set default values based on selection with uniform indentation
+    if active_row_data:
+        default_amount = float(active_row_data.get("Amount", 15.0))
+        default_time = float(active_row_data.get("Time", 406.0))
+        default_v14 = float(active_row_data.get("V14", 0.0))
+        default_v10 = float(active_row_data.get("V10", 0.0))
+        default_v4 = float(active_row_data.get("V4", 0.0))
+    elif demo_scenario == "🟠 Manual Review (Borderline Queue)":
+        # Tuned borderline values to reliably hit the 0.60 - 0.64 manual review band
+        default_amount = 650.0
+        default_time = 85000.0
+        default_v14 = -10.5
+        default_v10 = -7.5
+        default_v4 = 6.8
+    elif demo_scenario == "🟢 Standard Pass (Low Risk)":
+        default_amount = 15.0
+        default_time = 406.0
+        default_v14 = 0.0
+        default_v10 = 0.0
+        default_v4 = 0.0
+    else:  # Custom Input defaults
+        default_amount = 15.0
+        default_time = 406.0
+        default_v14 = 0.0
+        default_v10 = 0.0
+        default_v4 = 0.0
 
-  amount = st.number_input(
-      "Transaction Amount ($)",
-      min_value=0.0,
-      max_value=100000.0,
-      value=default_amount,
-      step=5.0,
-  )
-  time_val = st.number_input(
-      "Transaction Time (Seconds)",
-      min_value=0.0,
-      max_value=172800.0,
-      value=default_time,
-      step=100.0,
-  )
+    amount = st.number_input(
+        "Transaction Amount ($)",
+        min_value=0.0,
+        max_value=100000.0,
+        value=default_amount,
+        step=5.0,
+    )
+    time_val = st.number_input(
+        "Transaction Time (Seconds)",
+        min_value=0.0,
+        max_value=172800.0,
+        value=default_time,
+        step=100.0,
+    )
 
-  st.markdown("**PCA Anomaly Signals (V1 - V28)**")
-  v14 = st.slider("V14 (Primary Risk Driver)", -20.0, 10.0, default_v14, 0.5)
-  v10 = st.slider("V10 (Secondary Anomaly Flag)", -20.0, 10.0, default_v10, 0.5)
-  v4 = st.slider("V4 (Transaction Intent Correlation)", -10.0, 10.0, default_v4, 0.5)
+    st.markdown("**PCA Anomaly Signals (V1 - V28)**")
+    v14 = st.slider("V14 (Primary Risk Driver)", -20.0, 10.0, default_v14, 0.5)
+    v10 = st.slider("V10 (Secondary Anomaly Flag)", -20.0, 10.0, default_v10, 0.5)
+    v4 = st.slider("V4 (Transaction Intent Correlation)", -10.0, 10.0, default_v4, 0.5)
 
-  # Construct payload
-  payload = {"Time": time_val, "Amount": amount}
-  if active_row_data:
-    for k, v in active_row_data.items():
-      if k not in ['Class', 'is_fraud']:
-        payload[k] = v
-  else:
-    for i in range(1, 29):
-      payload[f"V{i}"] = 0.0
-    payload["V14"] = v14
-    payload["V10"] = v10
-    payload["V4"] = v4
+    # Construct payload
+    payload = {"Time": time_val, "Amount": amount}
+    if active_row_data:
+        for k, v in active_row_data.items():
+            if k not in ['Class', 'is_fraud']:
+                payload[k] = v
+    else:
+        for i in range(1, 29):
+            payload[f"V{i}"] = 0.0
+        payload["V14"] = v14
+        payload["V10"] = v10
+        payload["V4"] = v4
 
 with col_right:
-  st.subheader("Decision Engine Output")
-  if st.button("Evaluate Transaction Payload", type="primary"):
-    res = engine.predict_transaction(payload)
-    prob = res["probability"]
-    tier = res["risk_tier"]
-    action = res["action"]
+    st.subheader("Decision Engine Output")
+    if st.button("Evaluate Transaction Payload", type="primary"):
+        res = engine.predict_transaction(payload)
+        prob = res["probability"]
+        tier = res["risk_tier"]
+        action = res["action"]
 
-    if action == "PASS":
-      st.success(f"**Action: {action}** | Tier: {tier}")
-    elif action in ["STEP-UP 2FA", "MANUAL REVIEW"]:
-      st.warning(f"**Action: {action}** | Tier: {tier}")
-    else:
-      st.error(f"**Action: {action}** | Tier: {tier}")
+        if action == "PASS":
+            st.success(f"**Action: {action}** | Tier: {tier}")
+        elif action in ["STEP-UP 2FA", "MANUAL REVIEW"]:
+            st.warning(f"**Action: {action}** | Tier: {tier}")
+        else:
+            st.error(f"**Action: {action}** | Tier: {tier}")
 
-    st.metric("Calibrated Fraud Probability (PD)", f"{prob*100:.3f}%")
-    st.progress(min(prob, 1.0))
+        st.metric("Calibrated Fraud Probability (PD)", f"{prob*100:.3f}%")
+        st.progress(min(prob, 1.0))
 
-    st.subheader("Transaction SHAP Explainability")
-    try:
-      df_proc = engine.preprocess(payload)
-      fig = explainer.plot_local_waterfall(df_proc)
-      st.pyplot(fig)
-    except Exception as e:
-      st.info(f"Local SHAP Explanation calculated cleanly ({e}).")
+        st.subheader("Transaction SHAP Explainability")
+        try:
+            df_proc = engine.preprocess(payload)
+            fig = explainer.plot_local_waterfall(df_proc)
+            st.pyplot(fig)
+        except Exception as e:
+            st.info(f"Local SHAP Explanation calculated cleanly ({e}).")
