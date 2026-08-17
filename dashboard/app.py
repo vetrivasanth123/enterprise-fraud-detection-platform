@@ -161,4 +161,4 @@ with col_right:
             fig = explainer.plot_local_waterfall(df_proc)
             st.pyplot(fig)
         except Exception as e:
-            st.info(f"Local SHAP Explanation calculated cleanly ({e}).")----
+            st.info(f"Local SHAP Explanation calculated cleanly ({e}).")
