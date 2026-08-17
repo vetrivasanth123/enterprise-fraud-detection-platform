@@ -75,64 +75,67 @@ with col_left:
         ]
     )
     
-    # Pre-tuned baseline values for each risk tier
+    # Build complete baseline feature dictionaries for each tier
+    base_payload = {f"V{i}": 0.0 for i in range(1, 29)}
+    base_payload["Time"] = 406.0
+    base_payload["Amount"] = 15.0
+
     if demo_scenario == "🟢 Standard Pass (Low Risk)":
-        default_amount = 15.0
-        default_time = 406.0
-        default_v14 = 0.0
-        default_v10 = 0.0
-        default_v4 = 0.0
+        payload = base_payload.copy()
+        payload["Time"] = 406.0
+        payload["Amount"] = 15.0
     elif demo_scenario == "🟡 Step-Up 2FA (Medium Risk)":
-        default_amount = 250.0
-        default_time = 35000.0
-        default_v14 = -4.5
-        default_v10 = -3.0
-        default_v4 = 2.5
+        payload = base_payload.copy()
+        payload["Time"] = 35000.0
+        payload["Amount"] = 250.0
+        payload["V14"] = -4.5
+        payload["V10"] = -3.0
+        payload["V4"] = 2.5
     elif demo_scenario == "🟠 Manual Review (Borderline Queue)":
-        default_amount = 550.0
-        default_time = 72000.0
-        # Tuned specifically to hit the 0.60 - 0.64 Manual Review band
-        default_v14 = -7.5
-        default_v10 = -5.0
-        default_v4 = 4.8
+        payload = base_payload.copy()
+        payload["Time"] = 72000.0
+        payload["Amount"] = 650.0
+        payload["V14"] = -9.2
+        payload["V10"] = -6.5
+        payload["V4"] = 5.8
+        payload["V12"] = -5.0
+        payload["V11"] = -4.2
     elif demo_scenario == "🔴 Blocked Fraud (High Risk)":
-        default_amount = 1250.0
-        default_time = 120000.0
-        # Tuned to cross the 0.64 Block threshold
-        default_v14 = -14.2
-        default_v10 = -9.8
-        default_v4 = 7.4
-    else:  # Custom Input
-        default_amount = 15.0
-        default_time = 406.0
-        default_v14 = 0.0
-        default_v10 = 0.0
-        default_v4 = 0.0
+        payload = base_payload.copy()
+        payload["Time"] = 120000.0
+        payload["Amount"] = 1250.0
+        payload["V14"] = -15.2
+        payload["V10"] = -10.8
+        payload["V4"] = 8.4
+        payload["V12"] = -12.1
+        payload["V11"] = -9.5
+        payload["V3"] = -8.0
+    else:
+        payload = base_payload.copy()
 
     amount = st.number_input(
         "Transaction Amount ($)",
         min_value=0.0,
         max_value=100000.0,
-        value=default_amount,
+        value=float(payload["Amount"]),
         step=5.0,
     )
     time_val = st.number_input(
         "Transaction Time (Seconds)",
         min_value=0.0,
         max_value=172800.0,
-        value=default_time,
+        value=float(payload["Time"]),
         step=100.0,
     )
 
     st.markdown("**PCA Anomaly Signals (V1 - V28)**")
-    v14 = st.slider("V14 (Primary Risk Driver)", -20.0, 10.0, default_v14, 0.5)
-    v10 = st.slider("V10 (Secondary Anomaly Flag)", -20.0, 10.0, default_v10, 0.5)
-    v4 = st.slider("V4 (Transaction Intent Correlation)", -10.0, 10.0, default_v4, 0.5)
+    v14 = st.slider("V14 (Primary Risk Driver)", -20.0, 10.0, float(payload.get("V14", 0.0)), 0.5)
+    v10 = st.slider("V10 (Secondary Anomaly Flag)", -20.0, 10.0, float(payload.get("V10", 0.0)), 0.5)
+    v4 = st.slider("V4 (Transaction Intent Correlation)", -10.0, 10.0, float(payload.get("V4", 0.0)), 0.5)
 
-    # Construct payload expected by FraudDecisionEngine
-    payload = {"Time": time_val, "Amount": amount}
-    for i in range(1, 29):
-        payload[f"V{i}"] = 0.0
+    # Update payload with widget values
+    payload["Time"] = time_val
+    payload["Amount"] = amount
     payload["V14"] = v14
     payload["V10"] = v10
     payload["V4"] = v4
