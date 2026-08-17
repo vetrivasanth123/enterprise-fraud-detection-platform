@@ -11,8 +11,6 @@ import streamlit as st
 # PROJECT PATHS
 # ============================================================
 
-# Project structure:
-#
 # enterprise-fraud-detection-platform/
 # ├── dashboard/
 # │   └── app.py
@@ -24,10 +22,9 @@ import streamlit as st
 # │   ├── scaler.pkl
 # │   └── threshold_config.json
 # └── data / datasets / ...
-#
-# app.py is inside dashboard/, so project root is one level up.
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
+
 SRC_DIR = ROOT_DIR / "src"
 ARTIFACTS_DIR = ROOT_DIR / "artifacts"
 
@@ -36,7 +33,7 @@ if str(ROOT_DIR) not in sys.path:
 
 
 # ============================================================
-# PROJECT IMPORTS
+# IMPORT PROJECT ENGINES
 # ============================================================
 
 from src.fraud_engine import FraudDecisionEngine
@@ -44,7 +41,7 @@ from src.explainability import FraudExplainabilityEngine
 
 
 # ============================================================
-# PAGE CONFIG
+# STREAMLIT CONFIG
 # ============================================================
 
 st.set_page_config(
@@ -102,11 +99,21 @@ except Exception as e:
 
 
 # ============================================================
-# DECISION THRESHOLDS
+# LOCKED PROJECT DECISION BANDS
 # ============================================================
 
-# These are the SAME four bands already implemented in
-# src/fraud_engine.py.
+# These match src/fraud_engine.py exactly.
+#
+# DO NOT change these for the dashboard.
+#
+# CV/report operating threshold:
+# 0.64
+#
+# Four dashboard policy bands:
+# < 0.20       PASS
+# 0.20-<0.60   STEP-UP 2FA
+# 0.60-<0.64   MANUAL REVIEW
+# >= 0.64      BLOCK
 
 PASS_THRESHOLD = 0.20
 TWO_FA_THRESHOLD = 0.60
@@ -135,7 +142,7 @@ def decision_from_probability(probability):
 
 
 # ============================================================
-# REQUIRED RAW MODEL INPUTS
+# REQUIRED RAW FEATURES
 # ============================================================
 
 REQUIRED_COLUMNS = (
@@ -145,7 +152,7 @@ REQUIRED_COLUMNS = (
 
 
 # ============================================================
-# FIND TRANSACTION DATASET
+# FIND A COMPATIBLE TRANSACTION DATASET
 # ============================================================
 
 @st.cache_data
@@ -154,7 +161,6 @@ def find_transaction_dataset():
     search_roots = [
         ROOT_DIR / "data",
         ROOT_DIR / "datasets",
-        ROOT_DIR / "artifacts",
         ROOT_DIR,
     ]
 
@@ -180,18 +186,15 @@ def find_transaction_dataset():
             continue
 
 
-    # --------------------------------------------------------
     # Remove duplicates
-    # --------------------------------------------------------
-
     unique_files = []
     seen = set()
 
-    for file_path in candidate_files:
+    for path in candidate_files:
 
         try:
 
-            resolved = file_path.resolve()
+            resolved = path.resolve()
 
             if resolved not in seen:
 
@@ -203,10 +206,7 @@ def find_transaction_dataset():
             continue
 
 
-    # --------------------------------------------------------
-    # Prefer likely holdout/test files
-    # --------------------------------------------------------
-
+    # Prefer holdout/test/validation-looking files
     unique_files.sort(
         key=lambda p: (
             0
@@ -224,10 +224,6 @@ def find_transaction_dataset():
         )
     )
 
-
-    # --------------------------------------------------------
-    # Find first compatible dataset
-    # --------------------------------------------------------
 
     for file_path in unique_files:
 
@@ -253,7 +249,6 @@ def find_transaction_dataset():
 
                 return df, str(file_path)
 
-
         except Exception:
 
             continue
@@ -263,11 +258,11 @@ def find_transaction_dataset():
 
 
 # ============================================================
-# FIND REAL REPRESENTATIVE TRANSACTIONS
+# FIND REAL TRANSACTIONS FOR THE NATURAL TIERS
 # ============================================================
 
 @st.cache_data
-def find_representative_transactions():
+def find_real_representatives():
 
     df, source_path = find_transaction_dataset()
 
@@ -276,11 +271,9 @@ def find_representative_transactions():
         return {}, None
 
 
-    # --------------------------------------------------------
-    # Keep only model input columns
-    # --------------------------------------------------------
-
-    raw_df = df[REQUIRED_COLUMNS].copy()
+    raw_df = df[
+        REQUIRED_COLUMNS
+    ].copy()
 
 
     raw_df = raw_df.replace(
@@ -299,14 +292,6 @@ def find_representative_transactions():
         return {}, source_path
 
 
-    # --------------------------------------------------------
-    # IMPORTANT:
-    #
-    # Score the COMPLETE DATASET in ONE XGBoost CALL.
-    #
-    # We do NOT call predict_transaction() 228K times.
-    # --------------------------------------------------------
-
     try:
 
         processed = engine.preprocess(
@@ -319,20 +304,12 @@ def find_representative_transactions():
             )[:, 1]
         )
 
-    except Exception as e:
-
-        st.error(
-            f"Unable to score transaction dataset: {e}"
-        )
+    except Exception:
 
         return {}, source_path
 
 
-    # --------------------------------------------------------
-    # Identify the four existing decision bands
-    # --------------------------------------------------------
-
-    band_masks = {
+    masks = {
 
         "PASS":
             probabilities < 0.20,
@@ -343,12 +320,6 @@ def find_representative_transactions():
                 & (probabilities < 0.60)
             ),
 
-        "MANUAL REVIEW":
-            (
-                (probabilities >= 0.60)
-                & (probabilities < 0.64)
-            ),
-
         "BLOCK":
             probabilities >= 0.64,
     }
@@ -357,11 +328,7 @@ def find_representative_transactions():
     representatives = {}
 
 
-    # --------------------------------------------------------
-    # Pick one REAL transaction from each band
-    # --------------------------------------------------------
-
-    for action, mask in band_masks.items():
+    for action, mask in masks.items():
 
         positions = np.flatnonzero(mask)
 
@@ -369,38 +336,36 @@ def find_representative_transactions():
             continue
 
 
-        # First genuine transaction in the band.
-        selected_position = int(
+        position = int(
             positions[0]
         )
 
 
-        selected_row = raw_df.iloc[
-            selected_position
+        row = raw_df.iloc[
+            position
         ].copy()
 
 
         probability = float(
-            probabilities[selected_position]
+            probabilities[position]
         )
 
 
-        tier, expected_action = (
+        tier, calculated_action = (
             decision_from_probability(
                 probability
             )
         )
 
 
-        # Sanity check
-        if expected_action != action:
+        if calculated_action != action:
             continue
 
 
         representatives[action] = {
 
             "payload":
-                selected_row.to_dict(),
+                row.to_dict(),
 
             "result": {
 
@@ -416,9 +381,6 @@ def find_representative_transactions():
                 "action":
                     action,
             },
-
-            "index":
-                selected_position,
         }
 
 
@@ -426,11 +388,299 @@ def find_representative_transactions():
 
 
 # ============================================================
-# LOAD REPRESENTATIVE TRANSACTIONS
+# CREATE MANUAL-REVIEW DEMONSTRATION
 # ============================================================
 
-representatives, data_source = (
-    find_representative_transactions()
+@st.cache_data
+def find_manual_review_demo():
+
+    df, source_path = find_transaction_dataset()
+
+    if df is None:
+
+        return None
+
+
+    raw_df = df[
+        REQUIRED_COLUMNS
+    ].copy()
+
+
+    raw_df = raw_df.replace(
+        [np.inf, -np.inf],
+        np.nan,
+    )
+
+
+    raw_df = raw_df.dropna(
+        subset=REQUIRED_COLUMNS
+    ).reset_index(drop=True)
+
+
+    if len(raw_df) == 0:
+
+        return None
+
+
+    # --------------------------------------------------------
+    # We use real transactions as starting points.
+    #
+    # The dashboard then creates candidate feature vectors
+    # between genuine low-risk and high-risk observations.
+    #
+    # These are DEMONSTRATION inputs only.
+    #
+    # The final probability is ALWAYS calculated by the
+    # deployed XGBoost model.
+    # --------------------------------------------------------
+
+    try:
+
+        processed = engine.preprocess(
+            raw_df
+        )
+
+        probabilities = (
+            engine.model.predict_proba(
+                processed
+            )[:, 1]
+        )
+
+    except Exception:
+
+        return None
+
+
+    low_positions = np.flatnonzero(
+        probabilities < 0.20
+    )
+
+    high_positions = np.flatnonzero(
+        probabilities >= 0.64
+    )
+
+
+    if (
+        len(low_positions) == 0
+        or len(high_positions) == 0
+    ):
+
+        return None
+
+
+    # --------------------------------------------------------
+    # Select a manageable number of low/high examples.
+    # --------------------------------------------------------
+
+    low_sample = low_positions[
+        : min(25, len(low_positions))
+    ]
+
+    high_sample = high_positions[
+        : min(25, len(high_positions))
+    ]
+
+
+    candidates = []
+
+
+    # --------------------------------------------------------
+    # Interpolate between genuine low-risk and high-risk
+    # transactions.
+    #
+    # The model itself decides whether a candidate falls into
+    # the 0.60-0.64 review band.
+    # --------------------------------------------------------
+
+    interpolation_values = np.linspace(
+        0.0,
+        1.0,
+        101,
+    )
+
+
+    for low_idx in low_sample:
+
+        low_row = raw_df.iloc[
+            low_idx
+        ].to_numpy(dtype=float)
+
+
+        for high_idx in high_sample:
+
+            high_row = raw_df.iloc[
+                high_idx
+            ].to_numpy(dtype=float)
+
+
+            for alpha in interpolation_values:
+
+                candidate = (
+                    (1.0 - alpha) * low_row
+                    + alpha * high_row
+                )
+
+                candidates.append(candidate)
+
+
+    if len(candidates) == 0:
+
+        return None
+
+
+    candidates_array = np.asarray(
+        candidates,
+        dtype=float,
+    )
+
+
+    candidate_df = pd.DataFrame(
+        candidates_array,
+        columns=REQUIRED_COLUMNS,
+    )
+
+
+    candidate_df = candidate_df.replace(
+        [np.inf, -np.inf],
+        np.nan,
+    )
+
+
+    candidate_df = candidate_df.dropna(
+        subset=REQUIRED_COLUMNS
+    ).reset_index(drop=True)
+
+
+    if len(candidate_df) == 0:
+
+        return None
+
+
+    # --------------------------------------------------------
+    # ONE BATCH MODEL EVALUATION
+    # --------------------------------------------------------
+
+    try:
+
+        candidate_processed = (
+            engine.preprocess(
+                candidate_df
+            )
+        )
+
+        candidate_probabilities = (
+            engine.model.predict_proba(
+                candidate_processed
+            )[:, 1]
+        )
+
+    except Exception:
+
+        return None
+
+
+    # --------------------------------------------------------
+    # Find actual model output inside:
+    #
+    # 0.60 <= P < 0.64
+    # --------------------------------------------------------
+
+    review_positions = np.flatnonzero(
+        (
+            candidate_probabilities >= 0.60
+        )
+        & (
+            candidate_probabilities < 0.64
+        )
+    )
+
+
+    if len(review_positions) == 0:
+
+        return None
+
+
+    # Choose the probability closest to the middle of
+    # the documented review band.
+    target = 0.62
+
+    best_position = review_positions[
+        np.argmin(
+            np.abs(
+                candidate_probabilities[
+                    review_positions
+                ]
+                - target
+            )
+        )
+    ]
+
+
+    best_position = int(
+        best_position
+    )
+
+
+    payload = candidate_df.iloc[
+        best_position
+    ].to_dict()
+
+
+    probability = float(
+        candidate_probabilities[
+            best_position
+        ]
+    )
+
+
+    tier, action = (
+        decision_from_probability(
+            probability
+        )
+    )
+
+
+    if action != "MANUAL REVIEW":
+
+        return None
+
+
+    return {
+
+        "payload":
+            payload,
+
+        "result": {
+
+            "probability":
+                round(
+                    probability,
+                    5,
+                ),
+
+            "risk_tier":
+                tier,
+
+            "action":
+                action,
+        },
+
+        "synthetic":
+            True,
+    }
+
+
+# ============================================================
+# LOAD REPRESENTATIVES
+# ============================================================
+
+real_representatives, data_source = (
+    find_real_representatives()
+)
+
+
+manual_review_demo = (
+    find_manual_review_demo()
 )
 
 
@@ -438,9 +688,14 @@ representatives, data_source = (
 # 1. PORTFOLIO & SYSTEM OVERVIEW
 # ============================================================
 
-st.header("1. Portfolio & System Overview")
+st.header(
+    "1. Portfolio & System Overview"
+)
 
-col1, col2, col3, col4 = st.columns(4)
+
+col1, col2, col3, col4 = (
+    st.columns(4)
+)
 
 
 precision_val = config.get(
@@ -448,15 +703,18 @@ precision_val = config.get(
     0.8690,
 )
 
+
 pr_auc_val = config.get(
     "holdout_pr_auc",
     0.8529,
 )
 
+
 threshold_val = config.get(
     "optimal_threshold",
     0.64,
 )
+
 
 loss_val = config.get(
     "holdout_loss",
@@ -503,18 +761,21 @@ st.header(
     "2. Real-Time Transaction Scoring & Risk Triage"
 )
 
-col_left, col_right = st.columns(
-    [1, 1]
+
+col_left, col_right = (
+    st.columns([1, 1])
 )
 
 
 # ============================================================
-# LEFT COLUMN — INPUTS
+# LEFT SIDE
 # ============================================================
 
 with col_left:
 
-    st.subheader("Transaction Inputs")
+    st.subheader(
+        "Transaction Inputs"
+    )
 
 
     demo_scenario = st.selectbox(
@@ -586,14 +847,19 @@ with col_left:
 
 
         payload = {
-            "Time": float(time_val),
-            "Amount": float(amount),
+            "Time":
+                float(time_val),
+
+            "Amount":
+                float(amount),
         }
 
 
         for i in range(1, 29):
 
-            payload[f"V{i}"] = 0.0
+            payload[
+                f"V{i}"
+            ] = 0.0
 
 
         payload["V14"] = float(v14)
@@ -602,10 +868,11 @@ with col_left:
 
 
         selected_preset_action = None
+        selected_preset_result = None
 
 
     # ========================================================
-    # PRESET
+    # PRESET INPUT
     # ========================================================
 
     else:
@@ -633,43 +900,101 @@ with col_left:
         )
 
 
-        preset = representatives.get(
+        # ----------------------------------------------------
+        # Manual Review is the special dashboard demo.
+        # ----------------------------------------------------
+
+        if (
             selected_preset_action
-        )
+            == "MANUAL REVIEW"
+        ):
 
-
-        if preset is None:
-
-            st.error(
-                f"No real transaction was found for "
-                f"{selected_preset_action}."
+            preset = (
+                manual_review_demo
             )
 
-            st.info(
-                "The available dataset may not contain "
-                "a transaction in this probability band."
-            )
+            if preset is None:
 
-            payload = None
+                st.error(
+                    "The deployed model did not produce "
+                    "a probability inside the 0.60-0.64 "
+                    "Manual Review band from the dashboard "
+                    "demonstration search."
+                )
 
+                st.info(
+                    "No model, threshold, calibration, or "
+                    "CV/report result has been changed."
+                )
+
+                payload = None
+                selected_preset_result = None
+
+            else:
+
+                payload = preset[
+                    "payload"
+                ]
+
+                selected_preset_result = (
+                    preset["result"]
+                )
+
+                st.caption(
+                    "Dashboard demonstration input scored "
+                    "by the deployed fraud model."
+                )
+
+
+        # ----------------------------------------------------
+        # Other three presets use genuine transactions.
+        # ----------------------------------------------------
 
         else:
 
-            payload = preset["payload"]
-
-
-            preset_result = preset["result"]
-
-
-            st.caption(
-                "Preset uses a genuine transaction evaluated "
-                "through the deployed model."
+            preset = (
+                real_representatives.get(
+                    selected_preset_action
+                )
             )
 
 
+            if preset is None:
+
+                st.error(
+                    f"No genuine transaction was found "
+                    f"for {selected_preset_action} "
+                    f"in the available dataset."
+                )
+
+                payload = None
+                selected_preset_result = None
+
+            else:
+
+                payload = preset[
+                    "payload"
+                ]
+
+                selected_preset_result = (
+                    preset["result"]
+                )
+
+                st.caption(
+                    "Preset uses a genuine transaction "
+                    "evaluated through the deployed model."
+                )
+
+
+        # ----------------------------------------------------
+        # DISPLAY SELECTED PRESET INPUT
+        # ----------------------------------------------------
+
+        if payload is not None:
+
             st.metric(
                 "Actual Model Probability",
-                f"{float(preset_result['probability']) * 100:.3f}%",
+                f"{float(selected_preset_result['probability']) * 100:.3f}%",
             )
 
 
@@ -727,12 +1052,14 @@ with col_left:
 
 
 # ============================================================
-# RIGHT COLUMN — DECISION OUTPUT
+# RIGHT SIDE
 # ============================================================
 
 with col_right:
 
-    st.subheader("Decision Engine Output")
+    st.subheader(
+        "Decision Engine Output"
+    )
 
 
     evaluate = st.button(
@@ -749,14 +1076,19 @@ with col_right:
                 "No transaction payload is available."
             )
 
+
         else:
 
             # ------------------------------------------------
-            # REAL DEPLOYED DECISION ENGINE
+            # FINAL EVALUATION THROUGH ACTUAL ENGINE
             # ------------------------------------------------
 
-            result = engine.predict_transaction(
-                pd.DataFrame([payload])
+            result = (
+                engine.predict_transaction(
+                    pd.DataFrame(
+                        [payload]
+                    )
+                )
             )
 
 
@@ -765,12 +1097,18 @@ with col_right:
             )
 
 
-            engine_tier = result["risk_tier"]
-            engine_action = result["action"]
+            tier = result[
+                "risk_tier"
+            ]
+
+
+            action = result[
+                "action"
+            ]
 
 
             # ------------------------------------------------
-            # POLICY CONSISTENCY CHECK
+            # INDEPENDENT POLICY CHECK
             # ------------------------------------------------
 
             expected_tier, expected_action = (
@@ -781,26 +1119,26 @@ with col_right:
 
 
             if (
-                engine_tier != expected_tier
-                or engine_action != expected_action
+                tier != expected_tier
+                or action != expected_action
             ):
 
                 st.error(
-                    "Decision engine and probability bands "
-                    "are inconsistent."
+                    "Decision engine and dashboard "
+                    "policy bands are inconsistent."
                 )
 
 
                 st.write(
                     {
-                        "Probability":
+                        "Model Probability":
                             probability,
 
                         "Engine Tier":
-                            engine_tier,
+                            tier,
 
                         "Engine Action":
-                            engine_action,
+                            action,
 
                         "Expected Tier":
                             expected_tier,
@@ -812,22 +1150,22 @@ with col_right:
 
 
             elif (
-                selected_preset_action is not None
-                and engine_action
+                selected_preset_action
+                is not None
+                and action
                 != selected_preset_action
             ):
 
                 st.error(
-                    f"Preset expected "
-                    f"{selected_preset_action}, but the "
-                    f"actual model returned "
-                    f"{engine_action}."
+                    f"The actual deployed model returned "
+                    f"{action}, while this preset is intended "
+                    f"for {selected_preset_action}."
                 )
 
 
                 st.info(
-                    "No artificial probability or action "
-                    "override is applied."
+                    "The dashboard does not override the "
+                    "model probability or decision."
                 )
 
 
@@ -837,35 +1175,35 @@ with col_right:
                 # ACTION BADGE
                 # ============================================
 
-                if engine_action == "PASS":
+                if action == "PASS":
 
                     st.success(
                         f"**Action: PASS** | "
-                        f"Tier: {engine_tier}"
+                        f"Tier: {tier}"
                     )
 
 
-                elif engine_action == "STEP-UP 2FA":
+                elif action == "STEP-UP 2FA":
 
                     st.warning(
                         f"**Action: STEP-UP 2FA** | "
-                        f"Tier: {engine_tier}"
+                        f"Tier: {tier}"
                     )
 
 
-                elif engine_action == "MANUAL REVIEW":
+                elif action == "MANUAL REVIEW":
 
                     st.warning(
                         f"**Action: MANUAL REVIEW** | "
-                        f"Tier: {engine_tier}"
+                        f"Tier: {tier}"
                     )
 
 
-                elif engine_action == "BLOCK":
+                elif action == "BLOCK":
 
                     st.error(
                         f"**Action: BLOCK** | "
-                        f"Tier: {engine_tier}"
+                        f"Tier: {tier}"
                     )
 
 
@@ -891,7 +1229,7 @@ with col_right:
 
 
                 # ============================================
-                # BAND DESCRIPTION
+                # RISK BAND
                 # ============================================
 
                 if probability < 0.20:
@@ -925,7 +1263,7 @@ with col_right:
 
 
                 # ============================================
-                # SHAP
+                # SHAP WATERFALL
                 # ============================================
 
                 st.subheader(
@@ -967,13 +1305,13 @@ with col_right:
 
 
 # ============================================================
-# DATA SOURCE INFORMATION
+# FOOTER
 # ============================================================
 
 if data_source is not None:
 
     st.caption(
-        "Scenario presets are based on genuine transactions "
-        "from the available project dataset and are scored "
-        "using the deployed inference engine."
+        "Model outputs and risk actions are generated by "
+        "the deployed inference engine using the project's "
+        "locked decision policy."
     )
