@@ -1,18 +1,20 @@
+import joblib
+import matplotlib.pyplot as plt
 import shap
-import pandas as pd
 
-def get_shap_explainer(model):
-    return shap.TreeExplainer(model)
 
-def explain_single_transaction(explainer, df_single_scaled):
-    shap_exp = explainer(df_single_scaled)
-    vals = shap_exp.values[0]
-    cols = df_single_scaled.columns
+class FraudExplainabilityEngine:
 
-    df_shap = pd.DataFrame({
-        'feature': cols,
-        'value': df_single_scaled.iloc[0].values,
-        'shap_value': vals
-    }).sort_values(by='shap_value', key=abs, ascending=False)
+  def __init__(self, model_path='artifacts/xgboost_model.pkl'):
+    self.model = joblib.load(model_path)
+    self.explainer = shap.TreeExplainer(self.model)
 
-    return df_shap
+  def get_local_explanation(self, df_processed):
+    return self.explainer(df_processed)
+
+  def plot_local_waterfall(self, df_processed):
+    shap_values = self.explainer(df_processed)
+    fig, ax = plt.subplots(figsize=(8, 4))
+    shap.plots.waterfall(shap_values[0], show=False)
+    plt.tight_layout()
+    return fig
