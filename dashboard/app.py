@@ -39,21 +39,6 @@ except Exception as e:
     st.error(f"Error loading model artifacts: {e}")
     st.stop()
 
-
-# Helper to fetch real validation rows securely
-@st.cache_data
-def get_validation_row(idx):
-    for filename in ["val.csv", "validation.csv", "test.csv"]:
-        if os.path.exists(filename):
-            try:
-                df = pd.read_csv(filename)
-                if idx < len(df):
-                    return df.iloc[idx].to_dict()
-            except Exception:
-                continue
-    return None
-
-
 # 1. System Overview Metrics
 st.header("1. Portfolio & System Overview")
 col1, col2, col3, col4 = st.columns(4)
@@ -90,28 +75,32 @@ with col_left:
         ]
     )
     
-    # Fetch real row dynamically based on selected preset
-    active_row_data = None
+    # Set default values based on preset selection
     if demo_scenario == "🟢 Standard Pass (Low Risk)":
-        active_row_data = get_validation_row(0)
+        default_amount = 15.0
+        default_time = 406.0
+        default_v14 = 0.0
+        default_v10 = 0.0
+        default_v4 = 0.0
     elif demo_scenario == "🟡 Step-Up 2FA (Medium Risk)":
-        active_row_data = get_validation_row(150)
+        default_amount = 250.0
+        default_time = 35000.0
+        default_v14 = -4.5
+        default_v10 = -3.0
+        default_v4 = 2.5
     elif demo_scenario == "🟠 Manual Review (Borderline Queue)":
-        active_row_data = get_validation_row(21504)
-        if active_row_data:
-            # Minor adjustment to V14 to drop 0.6407 down into the 0.61 - 0.63 review band
-            active_row_data["V14"] = active_row_data.get("V14", 0.0) + 0.45
+        default_amount = 650.0
+        default_time = 85000.0
+        default_v14 = -12.5
+        default_v10 = -8.5
+        default_v4 = 6.8
     elif demo_scenario == "🔴 Blocked Fraud (High Risk)":
-        active_row_data = get_validation_row(821)
-
-    # Set default values from the fetched real row
-    if active_row_data:
-        default_amount = float(active_row_data.get("Amount", 15.0))
-        default_time = float(active_row_data.get("Time", 406.0))
-        default_v14 = float(active_row_data.get("V14", 0.0))
-        default_v10 = float(active_row_data.get("V10", 0.0))
-        default_v4 = float(active_row_data.get("V4", 0.0))
-    else:
+        default_amount = 1250.0
+        default_time = 120000.0
+        default_v14 = -14.2
+        default_v10 = -9.8
+        default_v4 = 7.4
+    else:  # Custom Input
         default_amount = 15.0
         default_time = 406.0
         default_v14 = 0.0
@@ -138,23 +127,13 @@ with col_left:
     v10 = st.slider("V10 (Secondary Anomaly Flag)", -20.0, 10.0, default_v10, 0.5)
     v4 = st.slider("V4 (Transaction Intent Correlation)", -10.0, 10.0, default_v4, 0.5)
 
-    # Construct payload preserving all authentic features from val.csv
+    # Construct payload
     payload = {"Time": time_val, "Amount": amount}
-    if active_row_data and demo_scenario != "Custom Input":
-        for k, v in active_row_data.items():
-            if k not in ['Class', 'is_fraud']:
-                payload[k] = v
-        payload["Amount"] = amount
-        payload["Time"] = time_val
-        payload["V14"] = v14
-        payload["V10"] = v10
-        payload["V4"] = v4
-    else:
-        for i in range(1, 29):
-            payload[f"V{i}"] = 0.0
-        payload["V14"] = v14
-        payload["V10"] = v10
-        payload["V4"] = v4
+    for i in range(1, 29):
+        payload[f"V{i}"] = 0.0
+    payload["V14"] = v14
+    payload["V10"] = v10
+    payload["V4"] = v4
 
 with col_right:
     st.subheader("Decision Engine Output")
