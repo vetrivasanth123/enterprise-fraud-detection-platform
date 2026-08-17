@@ -150,95 +150,127 @@ REQUIRED_COLUMNS = (
 # ============================================================
 
 @st.cache_data
-def find_transaction_dataset():
+def find_representative_transactions():
 
-    search_roots = [
-        ROOT_DIR / "data",
-        ROOT_DIR / "datasets",
-        ROOT_DIR / "artifacts",
-        ROOT_DIR,
-    ]
+    df, source_path = find_transaction_dataset()
 
-    files = []
+    if df is None:
+        return {}, None
 
-    for root in search_roots:
+    # Keep only the raw features required by the deployed model.
+    raw_df = df[REQUIRED_COLUMNS].copy()
 
-        if not root.exists():
-            continue
-
-        try:
-
-            files.extend(root.rglob("*.csv"))
-            files.extend(root.rglob("*.parquet"))
-
-        except Exception:
-            pass
-
-    # Remove duplicates
-    unique_files = []
-    seen = set()
-
-    for file_path in files:
-
-        try:
-
-            resolved = file_path.resolve()
-
-            if resolved not in seen:
-
-                seen.add(resolved)
-                unique_files.append(resolved)
-
-        except Exception:
-
-            pass
-
-    # Prefer files that look like holdout/test data.
-    unique_files.sort(
-        key=lambda p: (
-            0
-            if any(
-                word in p.name.lower()
-                for word in [
-                    "holdout",
-                    "test",
-                    "validation",
-                    "val",
-                ]
-            )
-            else 1,
-            len(str(p)),
-        )
+    raw_df = raw_df.replace(
+        [np.inf, -np.inf],
+        np.nan,
     )
 
-    for file_path in unique_files:
+    raw_df = raw_df.dropna(
+        subset=REQUIRED_COLUMNS
+    ).reset_index(drop=True)
 
-        try:
+    if len(raw_df) == 0:
+        return {}, source_path
 
-            if file_path.suffix.lower() == ".csv":
+    # --------------------------------------------------------
+    # IMPORTANT:
+    # Score the ENTIRE dataset in ONE model call.
+    #
+    # Do NOT call engine.predict_transaction() once per row.
+    # --------------------------------------------------------
 
-                df = pd.read_csv(file_path)
+    try:
 
-            elif file_path.suffix.lower() == ".parquet":
+        processed = engine.preprocess(raw_df)
 
-                df = pd.read_parquet(file_path)
+        probabilities = (
+            engine.model
+            .predict_proba(processed)[:, 1]
+        )
 
-            else:
+    except Exception as e:
 
-                continue
+        st.error(
+            f"Unable to score transaction dataset: {e}"
+        )
 
-            if all(
-                column in df.columns
-                for column in REQUIRED_COLUMNS
-            ):
+        return {}, source_path
 
-                return df, file_path
+    # --------------------------------------------------------
+    # Find one genuine transaction in each probability band.
+    # --------------------------------------------------------
 
-        except Exception:
+    bands = {
 
+        "PASS": (
+            probabilities < 0.20
+        ),
+
+        "STEP-UP 2FA": (
+            (probabilities >= 0.20)
+            & (probabilities < 0.60)
+        ),
+
+        "MANUAL REVIEW": (
+            (probabilities >= 0.60)
+            & (probabilities < 0.64)
+        ),
+
+        "BLOCK": (
+            probabilities >= 0.64
+        ),
+    }
+
+    representatives = {}
+
+    for action, mask in bands.items():
+
+        matching_indices = np.flatnonzero(mask)
+
+        if len(matching_indices) == 0:
             continue
 
-    return None, None
+        # Pick the first genuine transaction in the band.
+        selected_position = matching_indices[0]
+
+        selected_row = raw_df.iloc[
+            selected_position
+        ].copy()
+
+        probability = float(
+            probabilities[selected_position]
+        )
+
+        tier, expected_action = (
+            decision_from_probability(
+                probability
+            )
+        )
+
+        # ----------------------------------------------------
+        # Sanity check.
+        # ----------------------------------------------------
+
+        if expected_action != action:
+            continue
+
+        representatives[action] = {
+
+            "payload": selected_row.to_dict(),
+
+            "result": {
+                "probability": round(
+                    probability,
+                    5,
+                ),
+                "risk_tier": tier,
+                "action": action,
+            },
+
+            "index": int(selected_position),
+        }
+
+    return representatives, source_path
 
 
 # ============================================================
