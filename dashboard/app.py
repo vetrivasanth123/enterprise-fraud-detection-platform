@@ -63,25 +63,63 @@ col_left, col_right = st.columns([1, 1])
 
 with col_left:
   st.subheader("Transaction Inputs")
+  
+  # Preset Scenario Selector for Easy Demo / Testing
+  demo_scenario = st.selectbox(
+      "Load Scenario Preset",
+      [
+          "Custom Input", 
+          "🟢 Standard Pass (Low Risk)", 
+          "🟠 Manual Review (Borderline)", 
+          "🔴 Blocked Fraud (High Risk)"
+      ]
+  )
+  
+  # Set preset values based on selection
+  if demo_scenario == "🟢 Standard Pass (Low Risk)":
+      default_amount = 15.0
+      default_time = 406.0
+      default_v14 = 0.0
+      default_v10 = 0.0
+      default_v4 = 0.0
+  elif demo_scenario == "🟠 Manual Review (Borderline)":
+      default_amount = 450.0
+      default_time = 85200.0
+      default_v14 = -6.5
+      default_v10 = -4.2
+      default_v4 = 3.8
+  elif demo_scenario == "🔴 Blocked Fraud (High Risk)":
+      default_amount = 1250.0
+      default_time = 120000.0
+      default_v14 = -14.2
+      default_v10 = -9.8
+      default_v4 = 7.4
+  else:  # Custom Input
+      default_amount = 15.0
+      default_time = 406.0
+      default_v14 = 0.0
+      default_v10 = 0.0
+      default_v4 = 0.0
+
   amount = st.number_input(
       "Transaction Amount ($)",
       min_value=0.0,
       max_value=100000.0,
-      value=15.0,
+      value=default_amount,
       step=5.0,
   )
   time_val = st.number_input(
       "Transaction Time (Seconds)",
       min_value=0.0,
       max_value=172800.0,
-      value=406.0,
+      value=default_time,
       step=100.0,
   )
 
   st.markdown("**PCA Anomaly Signals (V1 - V28)**")
-  v14 = st.slider("V14 (Primary Risk Driver)", -20.0, 10.0, 0.0, 0.5)
-  v10 = st.slider("V10 (Secondary Anomaly Flag)", -20.0, 10.0, 0.0, 0.5)
-  v4 = st.slider("V4 (Transaction Intent Correlation)", -10.0, 10.0, 0.0, 0.5)
+  v14 = st.slider("V14 (Primary Risk Driver)", -20.0, 10.0, default_v14, 0.5)
+  v10 = st.slider("V10 (Secondary Anomaly Flag)", -20.0, 10.0, default_v10, 0.5)
+  v4 = st.slider("V4 (Transaction Intent Correlation)", -10.0, 10.0, default_v4, 0.5)
 
   payload = {"Time": time_val, "Amount": amount}
   for i in range(1, 29):
