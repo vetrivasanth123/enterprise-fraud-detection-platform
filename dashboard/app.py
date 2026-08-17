@@ -75,7 +75,7 @@ with col_left:
         ]
     )
     
-    # Assign deterministic default values based on preset selection
+    # Tuned default values ensuring each preset hits its correct tier range
     if demo_scenario == "🟢 Standard Pass (Low Risk)":
         default_amount = 15.0
         default_time = 406.0
@@ -83,21 +83,21 @@ with col_left:
         default_v10 = 0.0
         default_v4 = 0.0
     elif demo_scenario == "🟡 Step-Up 2FA (Medium Risk)":
-        default_amount = 250.0
-        default_time = 35000.0
-        default_v14 = -4.5
-        default_v10 = -3.0
-        default_v4 = 2.5
+        default_amount = 350.0
+        default_time = 45000.0
+        default_v14 = -6.5   # Tuned to land safely in 20% - 60% 2FA band
+        default_v10 = -4.5
+        default_v4 = 3.5
     elif demo_scenario == "🟠 Manual Review (Borderline Queue)":
-        default_amount = 550.0
-        default_time = 72000.0
-        default_v14 = -8.2
-        default_v10 = -5.8
-        default_v4 = 5.2
+        default_amount = 750.0
+        default_time = 92000.0
+        default_v14 = -13.2  # Tuned to land strictly in 60% - 64% Review band
+        default_v10 = -9.2
+        default_v4 = 7.1
     elif demo_scenario == "🔴 Blocked Fraud (High Risk)":
         default_amount = 1250.0
         default_time = 120000.0
-        default_v14 = -14.2
+        default_v14 = -14.2  # Tuned to land > 64% Block band
         default_v10 = -9.8
         default_v4 = 7.4
     else:  # Custom Input
