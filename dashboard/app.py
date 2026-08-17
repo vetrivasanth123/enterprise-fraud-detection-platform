@@ -2,10 +2,10 @@ import json
 import os
 import sys
 
-# Ensure root directory is in sys.path
-root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-if root_dir not in sys.path:
-    sys.path.append(root_dir)
+# Ensure script directory is in sys.path
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if BASE_DIR not in sys.path:
+    sys.path.append(BASE_DIR)
 
 import joblib
 import numpy as np
@@ -26,9 +26,15 @@ st.caption(
 
 @st.cache_resource
 def load_resources():
-    engine = FraudDecisionEngine()
-    explainer = FraudExplainabilityEngine()
-    with open("artifacts/threshold_config.json", "r") as f:
+    model_path = os.path.join(BASE_DIR, "artifacts", "xgboost_model.pkl")
+    scaler_path = os.path.join(BASE_DIR, "artifacts", "scaler.pkl")
+    config_path = os.path.join(BASE_DIR, "artifacts", "threshold_config.json")
+
+    engine = FraudDecisionEngine(
+        model_path=model_path, scaler_path=scaler_path, config_path=config_path
+    )
+    explainer = FraudExplainabilityEngine(model_path=model_path)
+    with open(config_path, "r") as f:
         config = json.load(f)
     return engine, explainer, config
 
@@ -62,20 +68,18 @@ col_left, col_right = st.columns([1, 1])
 
 with col_left:
     st.subheader("Transaction Inputs")
-    
-    # Preset Scenario Selector
+
     demo_scenario = st.selectbox(
         "Load Scenario Preset",
         [
-            "Custom Input", 
-            "🟢 Standard Pass (Low Risk)", 
+            "Custom Input",
+            "🟢 Standard Pass (Low Risk)",
             "🟡 Step-Up 2FA (Medium Risk)",
-            "🟠 Manual Review (Borderline Queue)", 
-            "🔴 Blocked Fraud (High Risk)"
-        ]
+            "🟠 Manual Review (Borderline Queue)",
+            "🔴 Blocked Fraud (High Risk)",
+        ],
     )
-    
-    # Build complete baseline feature dictionaries for each tier
+
     base_payload = {f"V{i}": 0.0 for i in range(1, 29)}
     base_payload["Time"] = 406.0
     base_payload["Amount"] = 15.0
@@ -129,11 +133,28 @@ with col_left:
     )
 
     st.markdown("**PCA Anomaly Signals (V1 - V28)**")
-    v14 = st.slider("V14 (Primary Risk Driver)", -20.0, 10.0, float(payload.get("V14", 0.0)), 0.5)
-    v10 = st.slider("V10 (Secondary Anomaly Flag)", -20.0, 10.0, float(payload.get("V10", 0.0)), 0.5)
-    v4 = st.slider("V4 (Transaction Intent Correlation)", -10.0, 10.0, float(payload.get("V4", 0.0)), 0.5)
+    v14 = st.slider(
+        "V14 (Primary Risk Driver)",
+        -20.0,
+        10.0,
+        float(payload.get("V14", 0.0)),
+        0.5,
+    )
+    v10 = st.slider(
+        "V10 (Secondary Anomaly Flag)",
+        -20.0,
+        10.0,
+        float(payload.get("V10", 0.0)),
+        0.5,
+    )
+    v4 = st.slider(
+        "V4 (Transaction Intent Correlation)",
+        -10.0,
+        10.0,
+        float(payload.get("V4", 0.0)),
+        0.5,
+    )
 
-    # Update payload with widget values
     payload["Time"] = time_val
     payload["Amount"] = amount
     payload["V14"] = v14
