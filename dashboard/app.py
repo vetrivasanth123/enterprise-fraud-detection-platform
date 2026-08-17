@@ -100,7 +100,7 @@ with col_left:
       default_v14 = float(active_row_data.get("V14", 0.0))
       default_v10 = float(active_row_data.get("V10", 0.0))
       default_v4 = float(active_row_data.get("V4", 0.0))
- elif demo_scenario == "🟠 Manual Review (Borderline Queue)":
+   elif demo_scenario == "🟠 Manual Review (Borderline Queue)":
       # Tuned borderline values to reliably hit the 0.60 - 0.64 manual review band
       default_amount = 550.0
       default_time = 72000.0
