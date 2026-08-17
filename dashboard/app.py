@@ -8,17 +8,16 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+
 # ------------------------------------------------------------
-# Ensure project root is available
+# Project root
+# app.py is inside dashboard/, so move one level up.
 # ------------------------------------------------------------
 
-ROOT_DIR = Path(__file__).resolve().parent
+ROOT_DIR = Path(__file__).resolve().parent.parent
 
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
-
-from src.fraud_engine import FraudDecisionEngine
-from src.explainability import FraudExplainabilityEngine
 
 
 # ============================================================
