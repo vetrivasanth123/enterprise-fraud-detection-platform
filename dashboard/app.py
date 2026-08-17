@@ -75,7 +75,7 @@ with col_left:
         ]
     )
     
-    # Set default values based on preset selection
+    # Pre-tuned baseline values for each risk tier
     if demo_scenario == "🟢 Standard Pass (Low Risk)":
         default_amount = 15.0
         default_time = 406.0
@@ -89,14 +89,16 @@ with col_left:
         default_v10 = -3.0
         default_v4 = 2.5
     elif demo_scenario == "🟠 Manual Review (Borderline Queue)":
-        default_amount = 650.0
-        default_time = 85000.0
-        default_v14 = -12.5
-        default_v10 = -8.5
-        default_v4 = 6.8
+        default_amount = 550.0
+        default_time = 72000.0
+        # Tuned specifically to hit the 0.60 - 0.64 Manual Review band
+        default_v14 = -7.5
+        default_v10 = -5.0
+        default_v4 = 4.8
     elif demo_scenario == "🔴 Blocked Fraud (High Risk)":
         default_amount = 1250.0
         default_time = 120000.0
+        # Tuned to cross the 0.64 Block threshold
         default_v14 = -14.2
         default_v10 = -9.8
         default_v4 = 7.4
@@ -127,7 +129,7 @@ with col_left:
     v10 = st.slider("V10 (Secondary Anomaly Flag)", -20.0, 10.0, default_v10, 0.5)
     v4 = st.slider("V4 (Transaction Intent Correlation)", -10.0, 10.0, default_v4, 0.5)
 
-    # Construct payload
+    # Construct payload expected by FraudDecisionEngine
     payload = {"Time": time_val, "Amount": amount}
     for i in range(1, 29):
         payload[f"V{i}"] = 0.0
@@ -159,4 +161,4 @@ with col_right:
             fig = explainer.plot_local_waterfall(df_proc)
             st.pyplot(fig)
         except Exception as e:
-            st.info(f"Local SHAP Explanation calculated cleanly ({e}).")
+            st.info(f"Local SHAP Explanation calculated cleanly ({e}).")----
